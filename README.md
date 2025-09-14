@@ -223,3 +223,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Android team for Jetpack Compose
 - Material Design team for design guidelines
 - Open source community for various libraries used
+
+
+Video Expaination
+https://youtu.be/VkMA7VZJatI
