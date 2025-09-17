@@ -2,6 +2,7 @@ package com.example.androiddemotask.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.androiddemotask.data.model.Constant
 import com.example.androiddemotask.data.model.NewsArticle
 import com.example.androiddemotask.domain.usecase.GetTopHeadlinesUseCase
 import com.example.androiddemotask.domain.usecase.SearchNewsUseCase
@@ -32,7 +33,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                getTopHeadlinesUseCase("2167b224dbd3476e8346bfddebee4133").collect { articles ->
+                getTopHeadlinesUseCase(Constant.Api_Key).collect { articles ->
                     _uiState.value = _uiState.value.copy(
                         articles = articles,
                         isLoading = false,
@@ -85,7 +86,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isRefreshing = true, error = null)
             try {
-                getTopHeadlinesUseCase("2167b224dbd3476e8346bfddebee4133").collect { articles ->
+                getTopHeadlinesUseCase(Constant.Api_Key).collect { articles ->
                     _uiState.value = _uiState.value.copy(
                         articles = articles,
                         isRefreshing = false,

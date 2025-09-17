@@ -10,9 +10,10 @@ data class Message(
     val timestamp: Long,
     val isFromUser: Boolean,
     val messageType: MessageType,
-    val imageUri: String? = null
+    val imageUri: String? = null,
+    val audioUri: String? = null
 )
 
 enum class MessageType {
-    TEXT, IMAGE
+    TEXT, IMAGE, AUDIO
 }

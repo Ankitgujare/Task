@@ -2,6 +2,9 @@ package com.example.androiddemotask.presentation.messages
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,13 +25,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.androiddemotask.data.model.Message
 import com.example.androiddemotask.data.model.MessageType
 import kotlinx.coroutines.launch
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.shouldShowRationale
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MessagesScreen(
     viewModel: MessagesViewModel = hiltViewModel()
@@ -36,6 +46,37 @@ fun MessagesScreen(
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    //Handling Permissions for all the Sdk Versions
+    val imagesPermission = if (Build.VERSION.SDK_INT >= 33) {
+        android.Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        android.Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+    val audioPermission = if (Build.VERSION.SDK_INT >= 33) {
+        android.Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        android.Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+    val imagePermState = rememberPermissionState(imagesPermission)
+    val audioPermState = rememberPermissionState(audioPermission)
+
+    var askedImage by remember { mutableStateOf(false) }
+    var askedAudio by remember { mutableStateOf(false) }
+
+    var showImageDeniedForever by remember { mutableStateOf(false) }
+    var showAudioDeniedForever by remember { mutableStateOf(false) }
+
+    fun openAppSettings() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            android.net.Uri.fromParts("package", context.packageName, null)
+        )
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    }
 
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -43,6 +84,15 @@ fun MessagesScreen(
     ) { uri ->
         uri?.let {
             viewModel.sendMessage("", MessageType.IMAGE, it.toString())
+        }
+    }
+
+    // Audio picker launcher
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            viewModel.sendMessage("", MessageType.AUDIO, audioUri = it.toString())
         }
     }
 
@@ -79,7 +129,22 @@ fun MessagesScreen(
         ) {
             // Image picker button
             FloatingActionButton(
-                onClick = { imagePickerLauncher.launch("image/*") },
+                onClick = {
+                    // For system picker, 33+ doesn't require runtime storage permission, but <=32 may
+                    if (Build.VERSION.SDK_INT >= 33 || imagePermState.status.isGranted) {
+                        imagePickerLauncher.launch("image/*")
+                    } else if (imagePermState.status.shouldShowRationale) {
+                        askedImage = true
+                        imagePermState.launchPermissionRequest()
+                    } else {
+                        if (askedImage) {
+                            showImageDeniedForever = true
+                        } else {
+                            askedImage = true
+                            imagePermState.launchPermissionRequest()
+                        }
+                    }
+                },
                 modifier = Modifier.size(48.dp),
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             ) {
@@ -91,6 +156,33 @@ fun MessagesScreen(
             }
 
             Spacer(modifier = Modifier.width(8.dp))
+
+            // Audio picker button
+            FloatingActionButton(
+                onClick = {
+                    if (Build.VERSION.SDK_INT >= 33 || audioPermState.status.isGranted) {
+                        audioPickerLauncher.launch("audio/*")
+                    } else if (audioPermState.status.shouldShowRationale) {
+                        askedAudio = true
+                        audioPermState.launchPermissionRequest()
+                    } else {
+                        if (askedAudio) {
+                            showAudioDeniedForever = true
+                        } else {
+                            askedAudio = true
+                            audioPermState.launchPermissionRequest()
+                        }
+                    }
+                },
+                modifier = Modifier.size(48.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Audiotrack,
+                    contentDescription = "Add Audio",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             // Message input field
             OutlinedTextField(
@@ -118,6 +210,7 @@ fun MessagesScreen(
                     contentDescription = "Send Message"
                 )
             }
+
         }
 
         // Simulate received message button
@@ -130,6 +223,27 @@ fun MessagesScreen(
             Text("Simulate Received Message")
         }
     }
+}
+
+// Settings fallback dialogs for permanent denial
+@Composable
+private fun PermissionDeniedDialog(
+    title: String,
+    message: String,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onOpenSettings) { Text("Open Settings") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        title = { Text(title) },
+        text = { Text(message) }
+    )
 }
 
 @Composable
@@ -183,6 +297,23 @@ fun MessageBubble(message: Message) {
                                 color = if (message.isFromUser) 
                                     MaterialTheme.colorScheme.onPrimary 
                                 else 
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    MessageType.AUDIO -> {
+                        // Simple audio chip display; actual playback can be added later
+                        AssistChip(
+                            onClick = { /* hook up playback */ },
+                            label = { Text("Audio message") }
+                        )
+                        if (message.content.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = message.content,
+                                color = if (message.isFromUser)
+                                    MaterialTheme.colorScheme.onPrimary
+                                else
                                     MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

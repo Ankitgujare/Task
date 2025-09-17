@@ -1,6 +1,9 @@
 package com.example.androiddemotask.presentation.profile
 
 import android.net.Uri
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -38,12 +41,38 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    // SDK-aware permission names
+    val imagesPermission = if (Build.VERSION.SDK_INT >= 33) {
+        android.Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        android.Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
     // Permission states
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
-    val storagePermissionState = rememberPermissionState(android.Manifest.permission.READ_MEDIA_IMAGES)
+    val storagePermissionState = rememberPermissionState(imagesPermission)
     val locationPermissionState = rememberPermissionState(android.Manifest.permission.ACCESS_FINE_LOCATION)
 
-    // Create temporary file for camera capture
+    // Track if we've asked before to detect permanent denial (Don't allow selected multiple times)
+    var askedCamera by remember { mutableStateOf(false) }
+    var askedStorage by remember { mutableStateOf(false) }
+    var askedLocation by remember { mutableStateOf(false) }
+
+    // Dialog states
+    var showCameraDeniedForever by remember { mutableStateOf(false) }
+    var showStorageDeniedForever by remember { mutableStateOf(false) }
+    var showLocationDeniedForever by remember { mutableStateOf(false) }
+
+    fun openAppSettings() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            android.net.Uri.fromParts("package", context.packageName, null)
+        )
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    }
+
+    // Creatd temporary file for camera capture
     var imageUri by remember { mutableStateOf<Uri?>(null) }
 
     // Image picker launchers
@@ -159,7 +188,6 @@ fun ProfileScreen(
             Button(
                 onClick = {
                     if (cameraPermissionState.status.isGranted) {
-                        // Create image file and launch camera
                         val imageFile = createImageFile()
                         imageUri = FileProvider.getUriForFile(
                             context,
@@ -168,10 +196,17 @@ fun ProfileScreen(
                         )
                         cameraLauncher.launch(imageUri)
                     } else if (cameraPermissionState.status.shouldShowRationale) {
-                        // Show rationale dialog
-                        // You can add a dialog here to explain why camera permission is needed
-                    } else {
+                        // User denied once: show rationale or directly request again
+                        askedCamera = true
                         cameraPermissionState.launchPermissionRequest()
+                    } else {
+                        // Either first time or permanently denied
+                        if (askedCamera) {
+                            showCameraDeniedForever = true
+                        } else {
+                            askedCamera = true
+                            cameraPermissionState.launchPermissionRequest()
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -189,15 +224,17 @@ fun ProfileScreen(
             Button(
                 onClick = {
                     if (storagePermissionState.status.isGranted) {
-                        // Launch gallery directly
                         galleryLauncher.launch("image/*")
                     } else if (storagePermissionState.status.shouldShowRationale) {
-                        // Show rationale dialog
-                        // For now, just launch the gallery anyway
-                        galleryLauncher.launch("image/*")
-                    } else {
-                        // Request permission first
+                        askedStorage = true
                         storagePermissionState.launchPermissionRequest()
+                    } else {
+                        if (askedStorage) {
+                            showStorageDeniedForever = true
+                        } else {
+                            askedStorage = true
+                            storagePermissionState.launchPermissionRequest()
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -215,13 +252,17 @@ fun ProfileScreen(
             Button(
                 onClick = {
                     if (locationPermissionState.status.isGranted) {
-                        viewModel.updateLocation(true) // Pass true for hasLocationPermission
+                        viewModel.updateLocation(true)
                     } else if (locationPermissionState.status.shouldShowRationale) {
-                        // Show rationale dialog
-                        // For now, just request permission
+                        askedLocation = true
                         locationPermissionState.launchPermissionRequest()
                     } else {
-                        locationPermissionState.launchPermissionRequest()
+                        if (askedLocation) {
+                            showLocationDeniedForever = true
+                        } else {
+                            askedLocation = true
+                            locationPermissionState.launchPermissionRequest()
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -265,5 +306,55 @@ fun ProfileScreen(
                 )
             }
         }
+    }
+
+    // Permanent denial dialogs with Settings fallback
+    if (showCameraDeniedForever) {
+        AlertDialog(
+            onDismissRequest = { showCameraDeniedForever = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCameraDeniedForever = false
+                    openAppSettings()
+                }) { Text("Open Settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCameraDeniedForever = false }) { Text("Cancel") }
+            },
+            title = { Text("Camera permission required") },
+            text = { Text("You have denied camera permission multiple times. Enable it from Settings to use the camera.") }
+        )
+    }
+    if (showStorageDeniedForever) {
+        AlertDialog(
+            onDismissRequest = { showStorageDeniedForever = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showStorageDeniedForever = false
+                    openAppSettings()
+                }) { Text("Open Settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStorageDeniedForever = false }) { Text("Cancel") }
+            },
+            title = { Text("Photos permission required") },
+            text = { Text("You have denied photo library permission multiple times. Enable it from Settings to select images.") }
+        )
+    }
+    if (showLocationDeniedForever) {
+        AlertDialog(
+            onDismissRequest = { showLocationDeniedForever = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLocationDeniedForever = false
+                    openAppSettings()
+                }) { Text("Open Settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLocationDeniedForever = false }) { Text("Cancel") }
+            },
+            title = { Text("Location permission required") },
+            text = { Text("You have denied location permission multiple times. Enable it from Settings to update your location.") }
+        )
     }
 }

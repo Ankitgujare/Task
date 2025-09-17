@@ -15,26 +15,38 @@ class MessageRepository @Inject constructor(
 ) {
     fun getAllMessages(): Flow<List<Message>> = messageDao.getAllMessages()
 
-    suspend fun sendMessage(content: String, messageType: MessageType = MessageType.TEXT, imageUri: String? = null) {
+    suspend fun sendMessage(
+        content: String,
+        messageType: MessageType = MessageType.TEXT,
+        imageUri: String? = null,
+        audioUri: String? = null
+    ) {
         val message = Message(
             id = UUID.randomUUID().toString(),
             content = content,
             timestamp = System.currentTimeMillis(),
             isFromUser = true,
             messageType = messageType,
-            imageUri = imageUri
+            imageUri = imageUri,
+            audioUri = audioUri
         )
         messageDao.insertMessage(message)
     }
 
-    suspend fun simulateReceivedMessage(content: String, messageType: MessageType = MessageType.TEXT, imageUri: String? = null) {
+    suspend fun simulateReceivedMessage(
+        content: String,
+        messageType: MessageType = MessageType.TEXT,
+        imageUri: String? = null,
+        audioUri: String? = null
+    ) {
         val message = Message(
             id = UUID.randomUUID().toString(),
             content = content,
             timestamp = System.currentTimeMillis(),
             isFromUser = false,
             messageType = messageType,
-            imageUri = imageUri
+            imageUri = imageUri,
+            audioUri = audioUri
         )
         messageDao.insertMessage(message)
     }

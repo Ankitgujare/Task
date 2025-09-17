@@ -32,11 +32,16 @@ class MessagesViewModel @Inject constructor(
         }
     }
 
-    fun sendMessage(content: String, messageType: MessageType = MessageType.TEXT, imageUri: String? = null) {
-        if (content.isBlank() && imageUri == null) return
+    fun sendMessage(
+        content: String,
+        messageType: MessageType = MessageType.TEXT,
+        imageUri: String? = null,
+        audioUri: String? = null
+    ) {
+        if (content.isBlank() && imageUri == null && audioUri == null) return
         
         viewModelScope.launch {
-            messageRepository.sendMessage(content, messageType, imageUri)
+            messageRepository.sendMessage(content, messageType, imageUri, audioUri)
         }
     }
 
